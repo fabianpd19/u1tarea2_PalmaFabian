@@ -1,7 +1,7 @@
 # Chat en Tiempo Real con Sockets
 
 **Nombre del estudiante:** Fabián Alexander Palma Dueñas  
-**Fecha de entrega:** 30/05/2025
+**Fecha de entrega:** 01/06/2025
 
 ---
 
