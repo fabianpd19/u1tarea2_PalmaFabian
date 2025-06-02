@@ -23,11 +23,18 @@ function getUserProfile(username) {
 
 const currentUser = getCurrentUser();
 
-// Enviar información del usuario al conectarse
-socket.emit("user-join", {
-  username: currentUser,
-  profileImage: getUserProfile(currentUser),
-});
+// Verificar si el usuario está autenticado
+if (!currentUser) {
+  window.location.href = "/register";
+} else {
+  console.log(`Bienvenido de nuevo, ${currentUser}!`);
+
+  // Enviar información del usuario al conectarse
+  socket.emit("user-join", {
+    username: currentUser,
+    profileImage: getUserProfile(currentUser),
+  });
+}
 
 send.addEventListener("click", () => {
   const message = document.querySelector("#message");
@@ -70,18 +77,22 @@ socket.on("message", ({ user, message, profileImage }) => {
 
 // Actualizar lista de usuarios
 socket.on("users-update", (users) => {
+  console.log("Lista de usuarios actualizada:", users);
   updateUsersList(users);
 });
 
 // Usuario conectado
 socket.on("user-connected", ({ user, profileImage }) => {
-  const notification = document.createRange().createContextualFragment(`
-        <div class="system-message">
-            <i class="fas fa-user-plus"></i> ${user} se ha conectado
-        </div>
-    `);
-  allMessages.append(notification);
-  allMessages.scrollTop = allMessages.scrollHeight;
+  // No mostrar notificación para el usuario actual
+  if (user !== currentUser) {
+    const notification = document.createRange().createContextualFragment(`
+          <div class="system-message">
+              <i class="fas fa-user-plus"></i> ${user} se ha conectado
+          </div>
+      `);
+    allMessages.append(notification);
+    allMessages.scrollTop = allMessages.scrollHeight;
+  }
 });
 
 // Usuario desconectado
@@ -96,6 +107,20 @@ socket.on("user-disconnected", ({ user }) => {
 });
 
 function updateUsersList(users) {
+  // Ordenar usuarios: primero conectados, luego alfabéticamente
+  users.sort((a, b) => {
+    if (a.connected && !b.connected) return -1;
+    if (!a.connected && b.connected) return 1;
+    return a.username.localeCompare(b.username);
+  });
+
+  // Destacar al usuario actual
+  const currentUserIndex = users.findIndex((u) => u.username === currentUser);
+  if (currentUserIndex > -1) {
+    const currentUserData = users.splice(currentUserIndex, 1)[0];
+    users.unshift(currentUserData); // Poner al usuario actual primero
+  }
+
   usersList.innerHTML = `
     <div class="users-header">
       <h6><i class="fas fa-users"></i> Usuarios (${users.length})</h6>
@@ -103,13 +128,18 @@ function updateUsersList(users) {
   `;
 
   users.forEach((user) => {
+    const isCurrentUser = user.username === currentUser;
     const userElement = document.createRange().createContextualFragment(`
-      <div class="user-item ${user.connected ? "online" : "offline"}">
+      <div class="user-item ${user.connected ? "online" : "offline"} ${
+      isCurrentUser ? "current-user" : ""
+    }">
         <img src="${user.profileImage}" alt="${
       user.username
     }" class="user-avatar">
         <div class="user-info">
-          <span class="user-name">${user.username}</span>
+          <span class="user-name">${
+            isCurrentUser ? `${user.username} (Tú)` : user.username
+          }</span>
           <span class="user-status">
             <i class="fas fa-circle"></i>
             ${user.connected ? "En línea" : "Desconectado"}

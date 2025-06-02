@@ -13,25 +13,23 @@ module.exports = (httpServer) => {
     socket.on("user-join", ({ username, profileImage }) => {
       if (!username) return;
 
+      // Registrar usuario
       registeredUsers.set(username, {
         profileImage: profileImage || "/img/perfil.jpg",
         lastSeen: new Date(),
         connected: true,
       });
 
+      // Agregar a usuarios conectados
       connectedUsers.set(socket.id, { username, profileImage });
 
       console.log(`Usuario conectado: ${username}`);
 
-      // Emitir lista actualizada a todos
-      io.emit(
-        "update-user-list",
-        Array.from(registeredUsers.entries()).map(([name, data]) => ({
-          username: name,
-          profileImage: data.profileImage,
-          connected: data.connected,
-        }))
-      );
+      // Notificar a todos los usuarios (incluyendo al que se acaba de conectar)
+      io.emit("user-connected", { user: username, profileImage });
+
+      // Enviar lista actualizada de usuarios a todos
+      broadcastUsersList();
     });
 
     socket.on("message", (message) => {
@@ -47,29 +45,45 @@ module.exports = (httpServer) => {
     });
 
     socket.on("disconnect", () => {
-      const userData = connectedUsers.get(socket.id);
-      if (userData) {
-        const { username } = userData;
-        connectedUsers.delete(socket.id);
-        if (registeredUsers.has(username)) {
-          const user = registeredUsers.get(username);
-          user.connected = false;
-          user.lastSeen = new Date();
+      const userInfo = connectedUsers.get(socket.id);
+      if (userInfo) {
+        console.log(`Usuario desconectado: ${userInfo.username}`);
+
+        // Verificar si el usuario está conectado desde otro dispositivo/pestaña
+        let userStillConnected = false;
+        for (const [sid, info] of connectedUsers.entries()) {
+          if (sid !== socket.id && info.username === userInfo.username) {
+            userStillConnected = true;
+            break;
+          }
         }
 
-        io.emit(
-          "update-user-list",
-          Array.from(registeredUsers.entries()).map(([name, data]) => ({
-            username: name,
-            profileImage: data.profileImage,
-            connected: data.connected,
-          }))
-        );
+        // Actualizar estado del usuario solo si no está conectado en otra sesión
+        if (!userStillConnected && registeredUsers.has(userInfo.username)) {
+          registeredUsers.set(userInfo.username, {
+            ...registeredUsers.get(userInfo.username),
+            connected: false,
+            lastSeen: new Date(),
+          });
+        }
+
+        // Remover de usuarios conectados
+        connectedUsers.delete(socket.id);
+
+        // Notificar a otros usuarios solo si el usuario ya no está conectado
+        if (!userStillConnected) {
+          socket.broadcast.emit("user-disconnected", {
+            user: userInfo.username,
+          });
+        }
+
+        // Enviar lista actualizada de usuarios
+        broadcastUsersList();
       }
     });
 
     // Enviar lista inicial de usuarios al conectarse
-    socket.emit("users-update", getUsersList());
+    broadcastUsersList();
   });
 
   function broadcastUsersList() {
@@ -77,32 +91,29 @@ module.exports = (httpServer) => {
   }
 
   function getUsersList() {
-    const users = [];
+    // Crear un mapa para evitar duplicados
+    const usersMap = new Map();
 
-    // Agregar usuarios conectados
+    // Primero agregar todos los usuarios registrados
+    for (const [username, userInfo] of registeredUsers) {
+      usersMap.set(username, {
+        username,
+        profileImage: userInfo.profileImage,
+        connected: false,
+        lastSeen: userInfo.lastSeen,
+      });
+    }
+
+    // Luego actualizar los que están conectados
     for (const [socketId, userInfo] of connectedUsers) {
-      users.push({
+      usersMap.set(userInfo.username, {
         username: userInfo.username,
         profileImage: userInfo.profileImage,
         connected: true,
       });
     }
 
-    // Agregar usuarios registrados pero desconectados
-    for (const [username, userInfo] of registeredUsers) {
-      const isConnected = Array.from(connectedUsers.values()).some(
-        (u) => u.username === username
-      );
-      if (!isConnected) {
-        users.push({
-          username,
-          profileImage: userInfo.profileImage,
-          connected: false,
-          lastSeen: userInfo.lastSeen,
-        });
-      }
-    }
-
-    return users;
+    // Convertir el mapa a un array
+    return Array.from(usersMap.values());
   }
 };
