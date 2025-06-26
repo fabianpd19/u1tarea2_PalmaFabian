@@ -22,7 +22,17 @@ login.addEventListener("click", () => {
 
     // Guardar foto de perfil en localStorage
     const profileSrc = profilePreview.src;
-    localStorage.setItem(`profile_${user}`, profileSrc);
+    try {
+      /* Object.defineProperty(window, "localStorage", {
+        value: null,
+        writable: true,
+      }); */
+
+      localStorage.setItem(`profile_${user}`, profileSrc);
+    } catch (error) {
+      alert("Error al guardar la imagen de perfil");
+      console.error("LocalStorage Error:", error);
+    }
 
     document.location.href = "/";
   } else {

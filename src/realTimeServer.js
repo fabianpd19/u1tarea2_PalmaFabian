@@ -33,14 +33,20 @@ module.exports = (httpServer) => {
     });
 
     socket.on("message", (message) => {
-      const userInfo = connectedUsers.get(socket.id);
-      if (userInfo && message.trim() !== "") {
-        io.emit("message", {
-          user: userInfo.username,
-          message: message.trim(),
-          profileImage: userInfo.profileImage,
-          timestamp: new Date().toISOString(),
-        });
+      try {
+        // throw new Error("Error de prueba en el envío de mensaje");
+        const userInfo = connectedUsers.get(socket.id);
+        if (userInfo && message.trim() !== "") {
+          io.emit("message", {
+            user: userInfo.username,
+            message: message.trim(),
+            profileImage: userInfo.profileImage,
+            timestamp: new Date().toISOString(),
+          });
+        }
+      } catch (error) {
+        console.error("Error al procesar el mensaje:", error);
+        return;
       }
     });
 
