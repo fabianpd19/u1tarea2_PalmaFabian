@@ -1,161 +1,220 @@
-# Chat en Tiempo Real con Sockets
+# Informe Técnico: Manejo de Excepciones en Node.js
 
-**Nombre del estudiante:** Fabián Alexander Palma Dueñas  
-**Fecha de entrega:** 30/05/2025
-
----
-
-## 📌 Introducción
-
-Este proyecto es una aplicación web de chat en tiempo real desarrollada utilizando **Node.js**, **Express**, y **Socket.IO**. Su propósito es demostrar cómo implementar comunicación bidireccional en tiempo real entre clientes y servidor, permitiendo que múltiples usuarios intercambien mensajes instantáneamente.
-
-El uso de **sockets** es esencial en aplicaciones modernas como chats, juegos en línea, sistemas de notificación o colaboración en tiempo real, donde se requiere comunicación constante sin necesidad de recargar la página.
+**Estudiante:** Fabián Alexander Palma Dueñas  
+**Carrera / Curso:** Ingeniería en Tecnologías de la Información - 7mo  
+**Fecha de Entrega:** 26/06/2025
 
 ---
 
-## 🧱 Repositorio Base
+## Introducción
 
-Repositorio original proporcionado por el docente:  
-🔗 [https://github.com/paulosk8/webChat/tree/main](https://github.com/paulosk8/webChat/tree/main)
+El presente informe tiene como objetivo detallar las **estrategias de manejo de excepciones** en aplicaciones desarrolladas en Node.js. Se aborda la importancia de contar con un manejo adecuado de errores para mejorar la calidad, robustez y mantenibilidad del código. Se explica cómo identificar distintos tipos de errores y se muestran las **buenas prácticas** recomendadas, aplicadas en proyectos desarrollados durante la Unidad 1 (por ejemplo, una API REST usando Serverless y un chat con Socket.IO).
 
-Para comenzar, se clonó el repositorio o se inició uno desde cero. Se trabajó con las siguientes ramas:
+---
 
-- `main`: Código inicial del proyecto.
-- `implementacion-chat`: Versión de referencia final (rama base utilizada para la creación del proyecto).
-- `mi-implementacion`: Rama creada para el desarrollo del proyecto.
-- `feature-usuarios-conectados`: Rama en la cual se añadieron funcionalidades extras.
+## Tipos de Errores en Node.js
 
-Comandos sugeridos (repositorio original):
+En Node.js, los errores pueden clasificarse en:
 
-```bash
-git clone https://github.com/paulosk8/webChat.git
-cd webChat
-git checkout -b mi-implementacion
+- **Errores de Sintaxis (SyntaxError):** Errores en el código que impiden su interpretación.
+- **Errores en Tiempo de Ejecución (Runtime Errors):**
+  - _TypeError_
+  - _ReferenceError_
+- **Errores del Sistema (SystemError):** Problemas con operaciones a nivel del sistema (por ejemplo, acceso a archivos o servicios externos).
+- **Errores Personalizados (CustomError):** Creación de errores a medida para situaciones específicas de la aplicación.
+
+Cada uno de estos errores debe ser tratado de forma adecuada para evitar fallos inesperados en la producción.
+
+---
+
+## Buenas Prácticas para el Manejo de Excepciones
+
+- **Uso de bloques try-catch:**  
+  Permite capturar errores tanto en bloques síncronos como en operaciones asincrónicas (usando async/await o Promise.catch).
+
+- **Manejo de errores asincrónicos:**  
+  Utiliza `async/await` y captura los errores con `try-catch` o utiliza `.catch` en promesas.
+
+- **Centralización del manejo de errores:**  
+  En aplicaciones con Express, es recomendable crear un middleware global para capturar errores no controlados.
+
+- **Logging de errores:**  
+  Registra los errores en consola usando `console.error` o, preferiblemente, con herramientas como `winston`.
+
+- **Respuestas HTTP claras y estándar:**  
+  Devuelve códigos adecuados (por ejemplo, 500 para errores internos o 404 para rutas no encontradas) con mensajes descriptivos.
+
+- **Validación de datos:**  
+  Emplea librerías como `zod` o `yup` para validar entradas y evitar errores derivados de datos mal formateados.
+
+---
+
+## Ejemplo Aplicado de la Unidad 1: Chat con Socket.IO
+
+### 1. Manejo de errores al recibir mensajes:
+
+#### Middleware de conexión y eventos con `try-catch`
+
+```js
+socket.on("message", (message) => {
+  try {
+    const userInfo = connectedUsers.get(socket.id);
+    if (userInfo && message.trim() !== "") {
+      io.emit("message", {
+        user: userInfo.username,
+        message: message.trim(),
+        profileImage: userInfo.profileImage,
+        timestamp: new Date().toISOString(),
+      });
+    }
+  } catch (error) {
+    console.error(`Error al procesar mensaje de ${socket.id}:`, error);
+    socket.emit("error-message", "Error interno al enviar el mensaje.");
+  }
+});
 ```
 
-Comandos sugeridos (repositorio actual)
+**Error forzado:**
 
-```bash
-https://github.com/fabianpd19/u1tarea2_PalmaFabian
-cd u1tarea2_PalmaFabian
-git checkout -b feature-usuarios-conectados
+```
+throw new Error("Error de prueba en el envío de mensaje");
 ```
 
----
+**Evidencia:**
 
-## 🧩 Implementación del Proyecto
+> ![Manejo de errores al recibir mensajes](https://i.imgur.com/O0HRRyy.png)
 
-#### 📁 Estructura del código
+**¿Qué valida?**
 
-    src/
-    ├── index.js
-    ├── realTimeServer.js
-    ├── middlewares/
-    │   └── isLoggedin.js
-    ├── public/
-    │   ├── css/
-    │   ├── img/
-    │   ├── js/
-    │   │   ├── register.js
-    │   │   └── script.js
-    ├── routes/
-    │   └── index.js
-    └── views/
-    │   ├── index.html
-    └── register.html
+- Que el mensaje no esté vacío.
+- Que el usuario esté correctamente conectado.
 
----
+**¿Por qué se hace?**
 
-## ✨ Nuevas funcionalidades añadidas
+> Para evitar que se emitan mensajes vacíos o que un socket sin información envíe datos mal formados.
 
-- **Carga y visualización de imagen de perfil**: Los usuarios pueden subir una imagen personalizada durante el registro. Esta imagen se muestra como avatar en el chat y se almacena en el navegador mediante localStorage para mantener la personalización sin necesidad de almacenamiento en servidor.
-  > ![Uso de imagen personalizada](https://i.imgur.com/mMQ9ngL.png)
-- **Diferenciación visual de mensajes**: Los mensajes enviados por el usuario actual se muestran alineados a la derecha, mientras que los mensajes de otros usuarios aparecen alineados a la izquierda, facilitando la identificación visual rápida.
-  > ![Diferencia visual de mensajes](https://i.imgur.com/a63GA03.png)
-- **Lista dinámica de usuarios**: Se añadió una lista que muestra todos los usuarios registrados, indicando su estado (en línea o desconectado) y mostrando su imagen de perfil. El usuario actual se destaca visualmente para mayor claridad.
-  > ![Lista de usuarios conectados/desconectados](https://i.imgur.com/zLdal9i.png)
-- **Notificaciones en tiempo real**: Se muestran mensajes del sistema cuando un usuario se conecta o desconecta, mejorando la interacción social dentro del chat.
-  > ![Notificaciones](https://i.imgur.com/2YyFxQX.png)
+**¿Cómo se forzó el error?**
 
-## 🛠️ Lógica del Chat
+> Enviando un mensaje vacío o eliminando manualmente connectedUsers.
 
-- Al acceder al chat, el usuario debe ingresar un nombre (se guarda en una cookie).
-- Se añadió la funcionalidad para que el usuario pueda subir una imagen de perfil durante el registro, la cual se almacena en localStorage y se muestra como avatar en el chat.
-- Los mensajes enviados por el usuario actual se muestran alineados a la derecha, mientras que los mensajes de otros usuarios aparecen alineados a la izquierda, facilitando la distinción visual.
-- Se implementa una lista dinámica de usuarios conectados y desconectados, mostrando su estado y su imagen de perfil.
-- El cliente se conecta mediante Socket.IO y puede enviar mensajes que se replican en tiempo real a todos los usuarios conectados.
-- Los mensajes se renderizan dinámicamente con una estructura que incluye el nombre del usuario, su mensaje y una imagen de perfil.
+**Resultado:**
 
-## 🎨 Mejoras en el diseño
+- El error es capturado en consola.
+- El cliente recibe un evento de error con un mensaje explicativo.
 
-- Interfaz estilizada con imágenes, contenedores modernos y separación clara de mensajes.
-- Distribución responsiva compatible con pantallas móviles.
-- Implementación de vistas limpias, con separación entre lógica de cliente y servidor.
-- Visualización diferenciada de mensajes propios y ajenos mediante alineación y estilos CSS + Bootstrap.
+### 2. Validación del lado cliente (register.js)
 
----
+```js
+login.addEventListener("click", () => {
+  const user = document.querySelector("#username").value.trim();
+  if (user !== "") {
+    // Guardar nombre de usuario
+    document.cookie = `username=${user}`;
 
-## 🚀 Instrucciones de Ejecución
+    // Guardar foto de perfil en localStorage
+    const profileSrc = profilePreview.src;
+    try {
+      Object.defineProperty(window, "localStorage", {
+        value: null,
+        writable: true,
+      });
 
-Sigue estos pasos para ejecutar el proyecto localmente:
+      localStorage.setItem(`profile_${user}`, profileSrc);
+    } catch (error) {
+      alert("Error al guardar la imagen de perfil");
+      console.error("LocalStorage Error:", error);
+    }
 
-1. Clona el repositorio o copia los archivos a tu entorno local.
-2. Instala las dependencias:
-
-```bash
-npm install
+    document.location.href = "/";
+  } else {
+    alert("Por favor ingresa tu nombre de usuario");
+  }
+});
 ```
 
-3. Ejecuta el servidor
+**Error forzado:**
 
-```bash
-npm start
+```js
+Object.defineProperty(window, "localStorage", {
+  value: null,
+  writable: true,
+});
 ```
 
-4. Abre el navegador en:
+**Evidencia:**
 
-```bash
-http://localhost:3000
+> ![Validar que la imagen se haya subido correctamente](https://i.imgur.com/BA6AqWS.png)
+
+**¿Qué valida?**
+
+- Que localStorage esté disponible y tenga espacio suficiente.
+- Que el navegador permita guardar la imagen.
+
+**¿Por qué se hace?**
+
+> Porque en modo incógnito o si el espacio está lleno, localStorage.setItem() puede lanzar un error.
+
+**¿Cómo se forzó el error?**
+
+> Se fuerza un error al intentar acceder o usar localStorage, ya que se sobrescribe la propiedad localStorage del objeto window con null.
+
+**Resultado:**
+
+- Se muestra un alert: "Error al guardar la imagen de perfil".
+- Se imprime el error QuotaExceededError en la consola.
+
+### 3. Middleware para 404 y errores generales
+
+```
+// Ruta 404
+app.use((req, res, next) => {
+  res.status(404).sendFile(path.join(__dirname, "views", "404.html"));
+});
+
+// Middleware global de errores
+app.use((err, req, res, next) => {
+  console.error("Error no controlado:", err.stack);
+  res.status(500).json({ message: "Error interno del servidor" });
+});
 ```
 
-5. Ingresa un nombre de usuario y selecciona una imagen de perfil en el registro.
-6. Comienza a chatear en tiempo real, visualizando mensajes y usuarios con sus imágenes y estados.
+**Evidencia:**
+
+> ![Error de página no encontrada](https://i.imgur.com/4RHl6WE.png)
+
+> ![Error interno del servidor](https://i.imgur.com/fFuGUGR.png)
+
+**¿Qué valida?**
+
+- Que las rutas no existentes muestren una página personalizada.
+- Que errores generales no controlados retornen un estado 500.
+
+**¿Por qué se hace?**
+
+- Para mejorar la experiencia del usuario al acceder a rutas inválidas con una página clara y estética (404).
+- Para garantizar la estabilidad del servidor al capturar errores no controlados, registrarlos en consola y enviar una respuesta estructurada (500), sin necesidad de duplicar lógica de manejo de errores en cada ruta.
+
+**¿Cómo se forzó el error?**
+
+- Accediendo a una ruta no existente (/uta-que-no-existe).
+- Forzando un error en una ruta con throw new Error("Error de prueba").
+
+**Resultado:**
+
+- Se muestra el HTML 404.html.
+- Se retorna como mensaje 'Error interno del servidor'.
 
 ---
 
-## 🖼️ Capturas de Pantalla
+## Reutilización del Código
 
-#### 📝 Registro de usuario con imagen de perfil
-
-![Registro de usuario](https://i.imgur.com/DljZA0G.png)
-
-### 💬 Chat en funcionamiento
-
-![Chat en funcionamiento](https://i.imgur.com/Ldy3ODg.png)
-
-### 📱 Vista responsiva
-
-## ![Vista responsiva](https://i.imgur.com/KJ1VcQH.png)
-
-## 📚 Conclusiones
-
-Durante el desarrollo de este proyecto se aprendieron los siguientes conceptos clave:
-
-- Implementación de Sockets para comunicación en tiempo real.
-- Uso de Express y organización modular en Node.js.
-- Gestión de sesiones simples con cookies y almacenamiento local para imágenes de perfil.
-- Diferenciación visual de mensajes mediante alineación y estilos CSS.
-- Actualización dinámica de la lista de usuarios con estados y avatares.
-
-## 🧗‍♀️ Dificultades y soluciones
-
-- **Gestión de cookies en Socket.IO**: Se resolvió extrayendo manualmente la cookie del encabezado durante la conexión del socket.
-- **Actualización de interfaz al recibir mensajes**: Se implementó la generación dinámica de elementos HTML con createContextualFragment.
-- **Almacenamiento y recuperación de imágenes de perfil**: Se utilizó localStorage para evitar sobrecargar el servidor y mantener la personalización en el cliente.
+- Se reutilizó la lógica de validación en todos los eventos Socket.IO.
+- Se estandarizó el formato de los errores enviados al cliente.
+- Se reutilizó broadcastUsersList() y getUsersList() con protección en try-catch.
+- En el cliente, se usaron claves únicas para guardar perfiles (profile\_${user}) evitando conflictos.
 
 ---
 
-## 🔍 Referencias
+## Conclusiones
 
-- [📂 Repositorio base del proyecto – webChat (paulosk8)](https://github.com/paulosk8/webChat)  
-  Proyecto base proporcionado por el docente como referencia para el desarrollo del chat.
+> El manejo de errores correctamente implementado permite anticipar fallos, evitar caídas del servidor y mejorar la experiencia del usuario. En este proyecto de chat, se logró capturar tanto errores comunes como escenarios más raros (falta de espacio en el navegador, rutas inválidas, desconexiones incompletas). Estas prácticas hacen que el sistema sea más mantenible y confiable a largo plazo.
